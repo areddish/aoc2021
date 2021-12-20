@@ -1,41 +1,61 @@
 import ast
 
-def bfs(node, check_fn, op_fn, level = 0):
-   if not isinstance(node, Node):
-      return False
-
+# TODO: move this to the node class
+# Should recombine these two like before.
+def dfs_val_greater_than_10(node):
+   assert isinstance(node, Node)
+   result = None   
    if isinstance(node.left, Node):
-      if check_fn(node.left, level):
-         op_fn(node.left)
-         return True
-      res = bfs(node.left, check_fn, op_fn, level + 1)
-      if res:
-         return res
-   if isinstance(node.right, Node):
-      if check_fn(node.right, level):
-         op_fn(node.right)
-         return True
-      res = bfs(node.right, check_fn, op_fn, level + 1)
-      return res
+      result = dfs_val_greater_than_10(node.left)
+   elif node.left >= 10:
+      result = node
 
+   if result:
+      return result
+
+   result = None
+   if isinstance(node.right, Node):
+      result = dfs_val_greater_than_10(node.right)
+   elif node.right >= 10:
+      result = node
+
+   return result
+
+# TODO: move this to the node class
+def dfs(node, level = 0):
+   assert isinstance(node, Node)
+
+   if level == 3:
+      if isinstance(node.left, Node):
+         node.left.explode()
+         return True
+      elif isinstance(node.right, Node):
+         node.right.explode()
+         return True
+
+   result = False
+   if isinstance(node.left, Node):
+      result = dfs(node.left, level + 1)
+   if result:
+      return result
+
+   if isinstance(node.right, Node):
+      return dfs(node.right, level + 1)
+
+   return False
+
+# TODO: move this to the node class
 def right_most(node, val):
    assert isinstance(node, Node)
-   # # base case, this is a number
-   # if not isinstance(node, Node):
-   #    return node
-
    if not isinstance(node.right, Node):
       node.right += val
       return True
 
    return right_most(node.right, val)
 
+# TODO: move this to the node class
 def left_most(node, val):
    assert isinstance(node, Node)
-   # # base case, this is a number
-   # if not isinstance(node, Node):
-   #    return True
-
    if not isinstance(node.left, Node):
       node.left += val
       return True
@@ -48,9 +68,6 @@ class Node:
       self.right = right
       self.parent = parent
 
-   def add(self, pair):
-      pass
-      
    @staticmethod
    def split(node, is_left):
       if is_left:
@@ -77,20 +94,21 @@ class Node:
    def reduce(self, run_once=False):
       actioned = True
       while actioned:
-         #print("BEFORE:",end="")
-         #self.print()
-         actioned = bfs(self, lambda x,level: isinstance(x, Node) and level == 3, lambda x: x.explode())
+         #print("BEFORE:", self.print())
+         actioned = dfs(self, 0)
          if not actioned:
-            actioned = bfs(self, lambda x, level: isinstance(x, Node) and (x.left_val() >= 10 or x.right_val() >= 10), lambda x: Node.split(x, x.left_val() >= 10))
-         #print("AFTER:",end="")
-         #self.print()
+            node_to_split = dfs_val_greater_than_10(self)
+            if node_to_split:
+               Node.split(node_to_split, node_to_split.left_val() >= 10)
+               actioned = True
+         #print("AFTER:",self.print())
+
+         # This is just for testing so I can run a single iteration and examine the output
          if run_once:
             return
 
    def explode(self):
       #print("explode", self.left, self.right)
-
-      # something is still wrong here. jsut swapped left_most an right_most
       cur = self
       par = self.parent
       while par and par.left == cur:
@@ -115,14 +133,14 @@ class Node:
          else:
             par.right += self.right
 
-      # Find left most
+      # Replace the node with 0
       if self.parent:
          if self.parent.left == self:
-            #print ("left")
+            #print ("zero'ing left")
             self.parent.left = 0
          else:
             assert self.parent.right == self
-            #print("right")
+            #print("zero'ing right")
             self.parent.right = 0
 
       return self
@@ -153,8 +171,8 @@ class Node:
 
    @staticmethod
    def add(node1, node2):
-      assert node1.parent == None
-      assert node2.parent == None
+      # assert node1.parent == None
+      # assert node2.parent == None
 
       n = Node(node1, node2, None)
       node1.parent = n
@@ -174,42 +192,35 @@ class Node:
    def node_from_str(l_str):
       return Node.node_from_list(ast.literal_eval(l_str), None)
 
-with open("test3.txt", "rt") as file:
+with open("day18.txt", "rt") as file:
    data = [x.strip() for x in file.readlines()]
 
    fish = Node.node_from_str(data[0])
-   print(fish.print() + " + ")
-   print(fish.print())
    for line in data[1:]:
+      #print(" ", fish.print())
       next_fish = Node.node_from_str(line)
-      print(next_fish.print())
+      #print("+",next_fish.print())
       fish = Node.add(fish, next_fish)
-      print(" === ", fish.print())
+      #print("=", fish.print())
+      #print() 
    print(fish.print())
    print(f"Part 1 = {fish.magnitude()}")
 
-exit(-1)
+# Part 2, only 100 lines, brute force for the win...
+largest_pair_magnitude = 0
+for i in range(len(data)-1):
+   for j in range(i, len(data)):
+      f1 = Node.node_from_str(data[i])
+      f2 = Node.node_from_str(data[j])
+      m1 = Node.add(f1, f2).magnitude()
+      m2 = Node.add(f2, f1).magnitude()
+      largest_pair_magnitude = max(largest_pair_magnitude, m1, m2)
 
-# explosion tests
-# assert explode([[[[[9,8],1],2],3],4]) == [[[[0,9],2],3],4]
-# assert explode([7,[6,[5,[4,[3,2]]]]]) == [7,[6,[5,[7,0]]]]
-# assert explode([[6,[5,[4,[3,2]]]],1]) == [[6,[5,[7,0]]],3]
-# assert explode([[3,[2,[1,[7,3]]]],[6,[5,[4,[3,2]]]]]) == [[3,[2,[8,0]]],[9,[5,[4,[3,2]]]]]
-# assert explode([[3,[2,[8,0]]],[9,[5,[4,[3,2]]]]]) == [[3,[2,[8,0]]],[9,[5,[7,0]]]]
+print(f"Part 2 = {largest_pair_magnitude}")
 
-# split tests
-assert Snailfish.split(10) == [5, 5]
-assert Snailfish.split(11) == [5, 6]
-assert Snailfish.split(12) == [6, 6]
-assert Snailfish.split(9) == [4, 5]
 
-assert Snailfish.parse("[[1,2],[[3,4],5]]").magnitude() == 143
-assert Snailfish.parse("[[[[0,7],4],[[7,8],[6,0]]],[8,1]]").magnitude() == 1384
-assert Snailfish.parse("[[[[1,1],[2,2]],[3,3]],[4,4]]").magnitude() == 445
-assert Snailfish.parse("[[[[3,0],[5,3]],[4,4]],[5,5]]").magnitude() == 791
-assert Snailfish.parse("[[[[5,0],[7,4]],[5,5]],[6,6]]").magnitude() == 1137
-assert Snailfish.parse("[[[[8,7],[7,7]],[[8,6],[7,7]]],[[[0,7],[6,6]],[8,7]]]").magnitude() == 3488
-
+## Below here are tests that can be run when making changes to verify nothing is regressing
+exit(1)
 assert Node.node_from_str("[[1,2],[[3,4],5]]").magnitude() == 143
 assert Node.node_from_str("[[[[0,7],4],[[7,8],[6,0]]],[8,1]]").magnitude() == 1384
 assert Node.node_from_str("[[[[1,1],[2,2]],[3,3]],[4,4]]").magnitude() == 445
@@ -233,8 +244,6 @@ for test in explode_tests:
    node.reduce(True)
    print(node.print())
    assert node.print() == test[1]
-
-
 
 def gen_testcase(n):
    res = []
